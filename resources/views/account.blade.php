@@ -26,7 +26,7 @@
                 <li class="list-group-item">
                     <span>Номер платежа:{{ $user_payment->id }}</span> |
                     <span>Сумма платежа: {{ $user_payment->amount }} ₸</span> |
-                    @if($user_payment->status == 'success')
+                    @if($user_payment->status == 1)
                         <span style="color: forestgreen;">Статус: {{ $user_payment->status_desc }}</span> |
                     @else
                         <span style="color: red;">Статус: {{ $user_payment->status_desc }}</span> |

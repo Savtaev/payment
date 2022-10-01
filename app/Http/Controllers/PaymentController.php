@@ -11,16 +11,15 @@ use Illuminate\Support\Facades\Http;
 
 class PaymentController extends Controller
 {
-    public static function checkStatus($payment){
-        $hashed = Hash::make($payment->id .'123456' , [
+    public static function checkStatus($payment_id){
+        $hashed = Hash::make($payment_id .'123456' , [
             'rounds' => 10,
         ]);
         return Http::post('https://api.tarlanpayments.kz/payment/check-status',
             [
+                'reference_id' => $payment_id,
                 'merchant_id' => '1',
-                'reference_id' => $payment->id,
-                'secret_key' => $hashed,
-                'is_test' => true,
+                'secret_key' => $hashed
             ]
         );
 

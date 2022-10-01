@@ -14,31 +14,36 @@ class BusinessController extends Controller
     {
         $user_id = auth()->id();;
         $user_account = auth()->user()->account;;
+        if ($request->session()->has('payment')) {
+            $payment_id = $request->session()->get('payment');
+            $payment_status = PaymentController::checkStatus($payment_id);
+            if ($payment_status){
+                $user_payment = Payment::find($payment_id);
+                $user_payment->status_desc = $payment_status['message'];
+                $user_payment->save();
+                $request->session()->put('message', 'Платеж: ' . $payment_id . $payment_status['message']);
+            }
+            $request->session()->pull('payment', '');
+        } else {
+            $request->session()->pull('message', '');
+        }
+
+
         $user_payments = DB::table('payments')
             ->where('user_id', '=', $user_id)
             ->get();
-        foreach ($user_payments as $user_payment){
-            if ($user_payment->recipient_id){
-                $user_payment->status_desc = 'Бонусы начислены';
-                $user_payment->status = 'success';
-            } else {
-                $payment_status = PaymentController::checkStatus($user_payment);
-                $user_payment->status_desc = $payment_status['message'];
-            }
-            //$user_payment->status = $payment_status['data']['status'];
-            //$user_payment->save();
-            //$user_payment->status_desc = $payment_status['data']['status_desc'];
-        }
-        //$user_payments = [];
+
         $clients = DB::table('users')
             ->where('BIN', '=', 0)
             ->get();
+
+
         return view('account',
             [
                 'user_payments' => $user_payments,
                 'clients' => $clients,
                 'user_account' => $user_account,
-            ]);
+            ])  ;
     }
     public function payCallback(Request $request){
         $user = new User();
@@ -66,6 +71,8 @@ class BusinessController extends Controller
         $payment->amount = $request['amount'];
         $payment->user_id = auth()->id();
         $payment->save();
+        //DB::beginTransaction();
+        $request->session()->put('payment', $payment->id);
         if ($payment){
             $response = PaymentController::createInvoice($request, $payment->id);
             if ($response['is3ds']){
@@ -110,6 +117,8 @@ class BusinessController extends Controller
         $payment->amount = $request['sum'];
         $payment->user_id = auth()->id();
         $payment->recipient_id = $request->user_id;
+        $payment->status = 1;
+        $payment->status_desc = 'Бонусы начислены!';
 
         DB::transaction(function () use ($user, $payment) {
             $user->save();
