@@ -6,6 +6,7 @@ use App\Models\Payment;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 
 class BusinessController extends Controller
@@ -16,14 +17,17 @@ class BusinessController extends Controller
         $user_account = auth()->user()->account;;
         if ($request->session()->has('payment')) {
             $payment_id = $request->session()->get('payment');
+            $request->session()->pull('payment', '');
+
+            //$withdraw = Http::post("https://api.tarlanpayments.kz/invoice/payment/withdraw/$payment_id");
             $payment_status = PaymentController::checkStatus($payment_id);
             if ($payment_status){
                 $user_payment = Payment::find($payment_id);
                 $user_payment->status_desc = $payment_status['message'];
                 $user_payment->save();
-                $request->session()->put('message', 'Платеж: ' . $payment_id . $payment_status['message']);
+                $request->session()->put('message', 'Платеж: ' . $payment_id . ' ' . $payment_status['message']);
+                //$request->session()->put('message', 'Платеж: ' . $payment_id . ' ' . $withdraw['message']);
             }
-            $request->session()->pull('payment', '');
         } else {
             $request->session()->pull('message', '');
         }
@@ -46,14 +50,11 @@ class BusinessController extends Controller
             ])  ;
     }
     public function payCallback(Request $request){
-        $user = new User();
-        $user->name = $request['name'];
-        $user->phone_number = $request['phone_number'];
-        $user->password = $request['password'];
-        $user->save();
+
     }
     public function topUpAccount(Request $request)
     {
+        $request['pan'] = str_replace(" ", '', $request['pan']);
         $credentials = $request->validate([
             'amount' => 'required|numeric',
             'card_holder' => [
@@ -71,10 +72,43 @@ class BusinessController extends Controller
         $payment->amount = $request['amount'];
         $payment->user_id = auth()->id();
         $payment->save();
-        //DB::beginTransaction();
         $request->session()->put('payment', $payment->id);
         if ($payment){
-            $response = PaymentController::createInvoice($request, $payment->id);
+            $response = json_decode(PaymentController::createInvoice($request, $payment->id));
+            if (property_exists($response, 'is3ds')){
+                return view('3ds', [
+                    'acsUrl' => $response->acsUrl,
+                    'md' => $response->md,
+                    'pares' => $response->pares,
+                    'termUrl' => $response->termUrl,
+                ]);
+            }
+            if (property_exists($response, 'success')) {
+                if ($response->success == true) return redirect('/')->with('message', $response->message);
+                else return redirect('/')->withErrors($response->message);
+            }
+            else {
+                return $response;
+            }
+        }
+        else{
+            return 'DB Error';
+        }
+
+    }
+
+    public function topUpAccount2(Request $request)
+    {
+        $payment = new Payment();
+        $payment->amount = 500;
+        $payment->user_id = auth()->id();
+        $payment->save();
+        $request->session()->put('payment', $payment->id);
+        if ($payment){
+            $response = PaymentController::initInvoice($request, $payment->id);
+            if ($response['success']) {
+                return redirect($response['data']['redirect_url']) ;
+            }
             if ($response['is3ds']){
                 return view('3ds', [
                     'acsUrl' => $response['acsUrl'],
@@ -83,11 +117,8 @@ class BusinessController extends Controller
                     'termUrl' => $response['termUrl'],
                 ]);
             }
-            elseif ($response['success']) {
-                return redirect($response['data']['redirect_url']) ;
-            }
             else {
-                return 'Ошибка' . $response['message'];
+                return $response['message'];
             }
         }
         else{

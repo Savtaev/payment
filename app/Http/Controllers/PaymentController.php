@@ -48,4 +48,20 @@ class PaymentController extends Controller
             'is_test' => true,
         ]);
     }
+    public static function initInvoice(Request $request, $payment_id){
+        $hashed = Hash::make($payment_id .'123456' , [
+            'rounds' => 10,
+        ]);
+        return Http::post('https://api.tarlanpayments.kz/invoice/create', [
+            'merchant_id' => '1',
+            'amount' => 500,
+            'user_email' => auth()->user()['email'],
+            'description' => 'Test',
+            'back_url' => 'http://savbaumw.beget.tech/callback',
+            'request_url' => 'http://savbaumw.beget.tech/account',
+            'reference_id' => $payment_id,
+            'secret_key' => $hashed,
+            'is_test' => true,
+        ]);
+    }
 }
